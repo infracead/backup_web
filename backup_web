@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#
+# Frederico Sales
+# <frederico.sales@uab.ufjf.br>
+# CEAD UFJF
+# 2021
+#
+# Requirements
+# - postgresql13-client
+# >>>> "Leo esse script roda no container backup, ele vai funcionar somente nele."
+# - para usar o container: bastille console backup;
+# - para rodar o script na mão: backup_web;
+#
+
+# vars
+DATA="$(date +'%Y-%m-%d_%H:%M:%S')"
+CAMINHO="/srv/backup"
+EAD="/srv/ead"
+DEV="/srv/dev-moodle"
+SC="/srv/sc-experimental"
+
+# rsync
+ORIGEM="/srv/backup/"
+DESTINO="styx:/srv/backup"
+
+# sgdb
+USER="moodle"
+DB="moodle"
+HOST0="172.17.0.10" # ead.cead.ufjf.br
+HOST1="172.17.0.20" # dev-moodle.cead.ufjf.br
+HOST2="172.17.0.30" # sc-experimental.cead.ufjf.br
+
+# Funcao para compactar as pastas
+compactar_arquivos() {
+    "$(7z a "$CAMINHO"/www/ead-"$DATA".7z "$EAD" > /dev/null 2>&1)";
+    "$(7z a "$CAMINHO"/www/dev-"$DATA".7z "$DEV" > /dev/null 2>&1)";
+    "$(7z a "$CAMINHO"/www/sc-"$DATA".7z "$SC" > /dev/null 2>&1)";
+}
+
+# Funcao para fazer dump dos bancos (verificar por erros)
+dump_sgdb() {
+     "$(pg_dump -Z 9 -U  "$USER" -h "$HOST0" -d "$DB" -p 5432 > "$CAMINHO"/sql/ead-"$DATA"-sql.gz)";
+     "$(pg_dump -Z 9 -U  "$USER" -h "$HOST1" -d "$DB" -p 5433 > "$CAMINHO"/sql/dev-"$DATA"-sql.gz)";
+     "$(pg_dump -Z 9 -U  "$USER" -h "$HOST2" -d "$DB" -p 5432 > "$CAMINHO"/sql/sc-"$DATA"-sql.gz)";
+}
+
+# rsync
+synchronize() {
+    "$(rsync -avz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null --progress $ORIGEM $DESTINO")";
+}
+
+# do some:
+compactar_arquivos;
+dump_sgdb;
+synchronize;
